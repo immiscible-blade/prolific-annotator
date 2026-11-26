@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prolific-annotator"
+version = "0.1.0"
+description = "Run text annotation studies on Prolific: configurable question flows, balanced batching, attention/gold checks, quality flags and label distributions."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Om Dehlan" }]
+requires-python = ">=3.9"
+dependencies = ["pyyaml>=5.4"]
+keywords = ["annotation", "prolific", "crowdsourcing", "nlp", "survey"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+pannot = "prolific_annotator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/immiscible-blade/prolific-annotator"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+prolific_annotator = ["templates/app/*", "templates/apps_script/*", "examples/*/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

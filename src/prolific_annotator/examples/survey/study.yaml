@@ -1,0 +1,84 @@
+# Example study: a plain questionnaire per item (likert, multiple choice, optional
+# free text, and a final single choice that sets the item's outcome).
+# All reviews are made up for this example.
+
+study:
+  title: "Rating product reviews"
+  completion_url: ""
+  backend: {type: demo, url: ""}
+  estimated_minutes: 8
+  consent_html: |
+    <p>You will read 4 short product reviews and answer a few questions about each.
+    It takes about 8 minutes. Your answers are linked only to your Prolific ID.</p>
+  instructions_html: |
+    <p>Read each review, then answer the questions. The comment box is optional.</p>
+
+items:
+  file: items.csv
+  format: text
+  highlight: {start: "<hl>", end: "</hl>"}
+
+task:
+  start: tone
+  outcomes: {helpful: "Helpful", not_helpful: "Not helpful"}
+  questions:
+    - id: tone
+      title: "Tone"
+      text: "How positive is this review overall?"
+      type: likert
+      options:
+        - {value: "1", label: "Very negative"}
+        - {value: "2", label: "Negative"}
+        - {value: "3", label: "Neutral"}
+        - {value: "4", label: "Positive"}
+        - {value: "5", label: "Very positive"}
+      next: aspects
+    - id: aspects
+      title: "Aspects"
+      text: "Which aspects does the review talk about? Tick all that apply."
+      type: multi
+      min_selected: 1
+      options:
+        - {value: price, label: "Price"}
+        - {value: quality, label: "Quality"}
+        - {value: delivery, label: "Delivery"}
+        - {value: service, label: "Customer service"}
+        - {value: none, label: "None of these"}
+      next: comment
+    - id: comment
+      title: "Comment (optional)"
+      text: "Anything else worth noting about this review?"
+      type: text
+      required: false
+      next: helpful
+    - id: helpful
+      title: "Helpfulness"
+      text: "Would this review help someone decide whether to buy the product?"
+      type: single
+      options:
+        - {value: yes, label: "Yes", outcome: helpful}
+        - {value: no, label: "No", outcome: not_helpful}
+
+design:
+  votes_per_item: 3
+  items_per_session: 4
+  seed: 3
+  attention:
+    - id: attn1
+      position: any
+      html: |
+        <p><mark id="span">Attention check: for this review, choose "Very negative" for tone, tick only "Price",
+        leave the comment empty and answer "No" to the last question.</mark></p>
+      expected_answers: {tone: "1", aspects: [price], helpful: "no"}
+
+flags:
+  threshold: 2
+  ignore_pid_prefixes: [TEST_, DEV_, DEMO_]
+  rules:
+    gold_wrong: false
+    attention_wrong: true
+    fast: {min_seconds_per_item: 4}
+    skim: false
+    long_absence: {minutes: 5}
+    tab_burst: {away_seconds: 20, burst_seconds: 10}
+    highlight_unseen: false

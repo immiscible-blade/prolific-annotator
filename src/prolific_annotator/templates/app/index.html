@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Annotation study</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><span id="study-title"></span><span id="progress"></span></header>
+
+<main id="screen-loading" class="screen"><p>Loading…</p></main>
+
+<main id="screen-consent" class="screen hidden">
+  <h1 class="title"></h1>
+  <div id="consent-text"></div>
+  <label class="check"><input type="checkbox" id="consent-box"> I have read the information above and agree to take part.</label>
+  <button id="consent-btn" disabled>Continue</button>
+</main>
+
+<main id="screen-instr" class="screen hidden">
+  <h1>Instructions</h1>
+  <div id="instr-text"></div>
+  <button id="instr-btn">Start</button>
+</main>
+
+<main id="screen-item" class="screen hidden">
+  <div class="item-layout">
+    <section class="text-pane"><article id="item-text"></article></section>
+    <aside class="tree-pane">
+      <div id="tree"></div>
+      <div id="result" class="result hidden"></div>
+      <button id="next-btn" disabled>Next</button>
+    </aside>
+  </div>
+</main>
+
+<main id="screen-done" class="screen hidden">
+  <h1>Thank you!</h1>
+  <div id="done-msg"><p>Submitting your responses…</p></div>
+</main>
+
+<main id="screen-error" class="screen hidden">
+  <h1>Something went wrong</h1>
+  <p id="error-msg"></p>
+</main>
+
+<script src="flow.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

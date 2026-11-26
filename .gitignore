@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+build/
+dist/
+exports/
+results/
+*.sqlite
+# study data you collect must never be committed
+responses*.csv
+private/
