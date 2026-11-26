@@ -133,6 +133,7 @@
       if (cur) cur.max_scroll = Math.max(cur.max_scroll, (pane.scrollTop + pane.clientHeight) / pane.scrollHeight);
     };
     S.answers = {};
+    $("next-btn").textContent = "Next";
     $("tree").innerHTML = "";
     drawTree();
     show("screen-item");
@@ -207,6 +208,7 @@
 
   async function submitItem(outcome) {
     $("next-btn").disabled = true;
+    $("next-btn").textContent = "Saving…";
     const row = { ...cur, t_end: now(), outcome, answers: { ...S.answers }, n_items: S.seq.length,
                   study: S.study, session: S.session };
     row.time_on_item = row.t_end - row.t_start;

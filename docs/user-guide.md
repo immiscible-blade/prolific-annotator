@@ -1,6 +1,6 @@
 # User guide
 
-This guide takes you from an annotation idea to a finished Prolific study. You need Python 3.9+ and a terminal; no web development.
+This guide takes you from an annotation idea to a finished Prolific study. You need Python 3.10+ and a terminal; no web development.
 
 1. [Install](#1-install)
 2. [Start from an example](#2-start-from-an-example)

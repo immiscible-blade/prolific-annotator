@@ -12,7 +12,7 @@ You describe the task in one YAML file: the questions, how they branch, the text
 
 It grew out of a research study that collected larger-N label distributions for argument annotation, and it keeps that study's lessons as defaults (see [Design choices](#design-choices)).
 
-**Live demo:** <https://immiscible-blade.github.io/prolific-annotator/> (decision tree) · <https://immiscible-blade.github.io/prolific-annotator/survey/> (questionnaire). Demo mode sends nothing anywhere; at the end you can download your answers as CSV.
+**Live demo:** <https://dehlan.win/prolific-annotator/> (decision tree) · <https://dehlan.win/prolific-annotator/survey/> (questionnaire). Demo mode sends nothing anywhere; at the end you can download your answers as CSV.
 
 ## Features
 

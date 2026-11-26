@@ -33,6 +33,7 @@ def _answer_until_next(page):
     for _ in range(12):
         if page.is_enabled("#next-btn"):
             return
+        page.wait_for_timeout(30)
         for q in page.query_selector_all("#tree .q"):
             ta = q.query_selector("textarea")
             if ta and not ta.input_value():
@@ -44,6 +45,18 @@ def _answer_until_next(page):
                     inp.check()
                     break
     assert page.is_enabled("#next-btn")
+
+
+def _next(page, prog_before):
+    """Click Next and wait until the next text (or the end screen) is really shown.
+
+    The app keeps the answered text on screen while the row is being saved, so
+    without this wait a test would look at the old, already answered item.
+    """
+    page.click("#next-btn")
+    page.wait_for_function(
+        "p => document.querySelector('#progress').textContent !== p"
+        " || !document.querySelector('#screen-done').classList.contains('hidden')", arg=prog_before)
 
 
 def test_full_session_with_server(tree_study, tmp_path, browser):
@@ -72,7 +85,7 @@ def test_full_session_with_server(tree_study, tmp_path, browser):
             page.dispatch_event("#item-text", "copy")  # blocked + logged
             page.eval_on_selector(".text-pane", "e => e.scrollTo(0, e.scrollHeight)")
             _answer_until_next(page)
-            page.click("#next-btn")
+            _next(page, prog)
         page.wait_for_selector("#screen-done:not(.hidden)")
         assert not errors, errors
         rows = store.conn.execute("SELECT item_id, row_json FROM responses WHERE pid='E2E_1'").fetchall()
@@ -107,7 +120,7 @@ def test_demo_mode_offers_csv(survey_study, browser, tmp_path):
             if page.is_visible("#screen-done"):
                 break
             _answer_until_next(page)
-            page.click("#next-btn")
+            _next(page, page.inner_text("#progress"))
         link = page.wait_for_selector("#done-msg a")
         assert link.get_attribute("download").startswith("responses_DEMO_")
     finally:

@@ -9,7 +9,7 @@ description = "Run text annotation studies on Prolific: configurable question fl
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Om Dehlan" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = ["pyyaml>=5.4"]
 keywords = ["annotation", "prolific", "crowdsourcing", "nlp", "survey"]
 classifiers = [

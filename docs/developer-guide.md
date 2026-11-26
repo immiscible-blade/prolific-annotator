@@ -115,4 +115,4 @@ pytest tests/e2e             # Playwright + Chromium; set REQUIRE_BROWSER=1 to f
 | `test_cli.py` | init → validate → build → simulate → ingest → compare |
 | `e2e/test_browser.py` | a full session in Chromium against the server; demo mode CSV |
 
-CI (`.github/workflows/ci.yml`) runs the unit tests on Python 3.9, 3.11 and 3.12, and the browser tests on 3.12. `pages.yml` publishes both examples in demo mode to GitHub Pages.
+CI (`.github/workflows/ci.yml`) runs the unit tests on Python 3.10, 3.12 and 3.13, and the browser tests on 3.12. `pages.yml` publishes both examples in demo mode to GitHub Pages.
