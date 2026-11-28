@@ -29,7 +29,7 @@ Never deploy `build/private/`: it contains the gold answers and item roles.
 2. In the Apps Script editor, go to *Project Settings* (gear icon) → *Script Properties* → *Add script property*:
    * `PROLIFIC_TOKEN` = the token;
    * `PROLIFIC_STUDY_ID` = your study id (the `STUDY_ID` in the study link, or set `study.prolific_study_id`).
-3. Run **`checkProlific`** from the function dropdown. Google asks for permission to contact `api.prolific.com`; it should then report the submissions it can see, e.g. `OK: 12 submissions {"ACTIVE":3,"AWAITING REVIEW":9}`.
+3. Run **`checkProlific`** from the function dropdown. Google asks for permission to contact `api.prolific.com`. The result appears in the **Execution log** panel below the code, e.g. `OK: 12 submissions {"ACTIVE":3,"AWAITING REVIEW":9}`. If the panel is hidden, click *Execution log* in the toolbar.
 
 Only people with edit access to the script can see Script Properties. Participants never see the token.
 

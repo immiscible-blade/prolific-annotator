@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+* Apps Script editor helpers (`setup`, `checkProlific`, `resetTestBatches`, `reloadBatches`) now log their result. The editor's Run button only shows the Execution log, not return values.
+
 ## 0.2.0
 
 * **Fix:** the consent page is only shown once a batch has arrived, and the app never redirects to Prolific without one. Before, a participant who clicked through quickly could reach the completion page with an empty session.

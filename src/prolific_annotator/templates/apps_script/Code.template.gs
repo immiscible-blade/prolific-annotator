@@ -49,6 +49,8 @@ const HEADERS = {
 };
 
 function isTest_(v) { return TEST_PREFIXES.some((p) => String(v).startsWith(p)); }
+// Editor helpers return their result AND log it: the editor's Run button only shows the Execution log.
+function log_(msg) { console.log(msg); return msg; }
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 // Get a tab, creating it with its header row if it does not exist.
@@ -81,7 +83,7 @@ function setup() {
   const ss = SpreadsheetApp.getActive();
   const def = ss.getSheetByName("Sheet1");
   if (def && def.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(def);
-  return `batches: ${sh.getLastRow() - 1} rows`;
+  return log_(`batches: ${sh.getLastRow() - 1} rows`);
 }
 
 function doGet(e) {
@@ -211,10 +213,10 @@ function checkProlific() {
   const props = PropertiesService.getScriptProperties();
   CacheService.getScriptCache().remove("prolific_status_" + (props.getProperty("PROLIFIC_STUDY_ID") || DEFAULT_STUDY_ID));
   const st = prolificStatuses_("");
-  if (!st) return "Could not read submissions: check PROLIFIC_TOKEN and PROLIFIC_STUDY_ID in Script Properties.";
+  if (!st) return log_("Could not read submissions: check PROLIFIC_TOKEN and PROLIFIC_STUDY_ID in Script Properties.");
   const counts = {};
   Object.keys(st).forEach((k) => { counts[st[k]] = (counts[st[k]] || 0) + 1; });
-  return "OK: " + Object.keys(st).length + " submissions " + JSON.stringify(counts);
+  return log_("OK: " + Object.keys(st).length + " submissions " + JSON.stringify(counts));
 }
 
 // Editor helper: free batches held by test ids and delete their rows.
@@ -230,7 +232,7 @@ function resetTestBatches() {
     const v = sh.getDataRange().getValues();
     for (let i = v.length - 1; i >= 1; i--) if (isTest_(v[i][1])) { sh.deleteRow(i + 1); deleted++; }
   }
-  return `freed ${freed} batch(es), deleted ${deleted} test row(s)`;
+  return log_(`freed ${freed} batch(es), deleted ${deleted} test row(s)`);
 }
 
 // Editor helper: replace the batch rows with BATCHES. Refuses once a real participant has a batch.
@@ -243,7 +245,7 @@ function reloadBatches() {
   if (sh.getLastRow() > 1) sh.deleteRows(2, sh.getLastRow() - 1);
   const out = BATCHES.map((b) => [b.batch_id, JSON.stringify(b.items), "", "", "", "", ""]);
   sh.getRange(2, 1, out.length, 7).setValues(out);
-  return `batches reloaded: ${out.length} rows`;
+  return log_(`batches reloaded: ${out.length} rows`);
 }
 
 // ---- batch list (generated) ----
