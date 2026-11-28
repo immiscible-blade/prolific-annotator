@@ -177,7 +177,7 @@ Step-by-step instructions for both, and for hosting `build/site/` on Netlify or 
 2. **Completion**: *I'll redirect them using a URL*. Copy the completion URL into `study.completion_url`, rebuild, and re-upload the site.
 3. **Devices**: desktop only (the layout works on phones, but long texts are hard to read there).
 4. **Places**: start with about 20% of your sessions for the soft launch.
-5. **Maximum time**: keep it below `study.stale_minutes` (default 90). Otherwise a slow participant's batch can be handed to someone else.
+5. **Places**: no more than the number of sessions. Anyone beyond that waits in the waiting room and is then asked to return the study.
 6. Preview the study yourself before publishing.
 
 ## 10. Soft launch, then the full run
@@ -201,7 +201,15 @@ If you change a flag rule after seeing soft-launch data, write down when and why
   Then reject. Prolific usually reopens the place.
 * Add rejected ids to a text file (one per line) and point `flags.rejected_pids_file` at it. Rejected participants are left out of the distributions but kept in the other outputs.
 
-Batches that were claimed but never finished go back into the pool automatically after `stale_minutes`.
+**Returns, pauses and the waiting room.** When a participant returns the study, Prolific gives the place to someone new within minutes, but their batch is still held. How it gets freed:
+
+* With a Prolific API token (see [deployment.md](deployment.md)), the backend asks Prolific. Batches of participants who *returned*, *timed out*, were *rejected* or *screened out* are freed the next time someone needs one. Participants who are still *active* keep their batch however long they pause, until Prolific's own maximum time runs out.
+* Without a token, the open page sends a heartbeat every `heartbeat_seconds`. A batch with no heartbeat and no answers for `idle_minutes` (default 15) is freed. Breaks with the page left open are fine; closing the laptop for longer than `idle_minutes` loses the batch.
+* If every batch is busy, the newcomer sees a waiting message. The page tries again every `waiting_poll_seconds` and continues by itself when a batch frees up, for up to `waiting_minutes`.
+
+Participants cannot pause and come back another day: Prolific times them out after the study's maximum time whatever the backend does.
+
+Freed batches are logged in the `sessions` tab as `released_prolific_returned`, `released_stale`, and so on.
 
 ## 12. Analyse
 
@@ -242,7 +250,8 @@ pannot compare old_votes.csv results/votes.csv --old-label-col label --out compa
 - [ ] Attention instructions are visible, explicit and different from each other.
 - [ ] Completion URL set, site rebuilt and re-uploaded.
 - [ ] Backend reachable: a test session shows up in the Sheet or database. `resetTestBatches` / `pannot reset-tests` afterwards.
-- [ ] Prolific's maximum time is below `stale_minutes`.
+- [ ] Prolific API token added and `checkProlific` says OK (or you accept the `idle_minutes` heartbeat rule).
+- [ ] Open only as many Prolific places as there are batches left; extra people end up in the waiting room.
 - [ ] `build/private/` is not uploaded anywhere.
 - [ ] Soft launch reviewed before opening the remaining places.
 
@@ -251,3 +260,4 @@ Pitfalls we hit:
 * **Spreadsheet types.** Google Sheets turns `false` into `FALSE` and long numeric-looking ids into numbers. The backend formats those columns as text, and ingest recomputes outcomes from the answers anyway.
 * **YAML `yes`/`no`.** Plain YAML turns them into booleans. This loader keeps them as text, but quote values in JSON or other tools.
 * **Mixing up participant ids.** Copy ids from `worker_flags.csv` when approving or rejecting.
+* **Showing the consent page before a batch exists.** An early version let fast clickers reach the end with an empty batch and get the completion code. The app now keeps a loading screen until the batch arrives and never redirects without one.

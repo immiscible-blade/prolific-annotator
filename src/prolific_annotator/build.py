@@ -3,7 +3,7 @@
 Output layout (``pannot build study.yaml --out build``)::
 
     build/site/       static participant app: deploy this folder (Netlify, GitHub Pages, any host)
-    build/backend/    Code.gs (Google Apps Script) and batches.json (for `pannot serve`)
+    build/backend/    Code.gs (Google Apps Script); batches.json + settings.json (for `pannot serve`)
     build/private/    manifest.json: item roles, gold answers, attention expectations,
                       word counts. Needed by `pannot ingest`. NEVER deploy this folder.
 
@@ -88,12 +88,18 @@ def build(cfg: dict, out_dir: str, batch_prefix: str = "s") -> dict:
     backend = os.path.join(out_dir, "backend")
     os.makedirs(backend, exist_ok=True)
     gs = (_template("apps_script", "Code.template.gs")
+          .replace("__IDLE_MIN__", json.dumps(cfg["study"]["idle_minutes"]))
+          .replace("__STUDY_ID__", json.dumps(str(cfg["study"].get("prolific_study_id") or "")))
           .replace("__STALE_MIN__", str(int(cfg["study"]["stale_minutes"])))
           .replace("__TEST_PREFIXES__", json.dumps(cfg["flags"]["ignore_pid_prefixes"]))
           .replace("__BATCHES__", json.dumps(ids_only)))
     with open(os.path.join(backend, "Code.gs"), "w", encoding="utf-8") as f:
         f.write(gs)
     _dump(os.path.join(backend, "batches.json"), ids_only)
+    _dump(os.path.join(backend, "settings.json"), {
+        "idle_minutes": cfg["study"]["idle_minutes"], "stale_minutes": cfg["study"]["stale_minutes"],
+        "test_prefixes": cfg["flags"]["ignore_pid_prefixes"],
+        "prolific_study_id": str(cfg["study"].get("prolific_study_id") or "")})
 
     private = os.path.join(out_dir, "private")
     os.makedirs(private, exist_ok=True)

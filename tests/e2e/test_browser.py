@@ -125,3 +125,33 @@ def test_demo_mode_offers_csv(survey_study, browser, tmp_path):
         assert link.get_attribute("download").startswith("responses_DEMO_")
     finally:
         httpd.shutdown()
+
+
+def test_waiting_room_and_heartbeat(tree_study, tmp_path, browser):
+    """All batches taken -> the page waits, continues when one frees up, then sends heartbeats."""
+    import copy
+    import time
+
+    from prolific_annotator.build import build
+    cfg = copy.deepcopy(tree_study[0])
+    cfg["study"].update(waiting_poll_seconds=1, heartbeat_seconds=1)
+    out = str(tmp_path / "build2")
+    build(cfg, out)
+    httpd, store = serve(out, "127.0.0.1", 0, str(tmp_path / "db2.sqlite"))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        n = store.conn.execute("SELECT COUNT(*) FROM batches").fetchone()[0]
+        for i in range(n):
+            assert store.claim(f"OTHER{i}")["ok"]
+        page = browser.new_page()
+        page.goto(f"http://127.0.0.1:{httpd.server_address[1]}/?PROLIFIC_PID=WAITER")
+        page.wait_for_function("document.querySelector('#loading-msg').textContent.includes('in use right now')")
+        assert page.is_hidden("#screen-consent")
+        store.release(store.conn.execute("SELECT batch_id FROM batches WHERE pid='OTHER0'").fetchone()[0])
+        page.wait_for_selector("#screen-consent:not(.hidden)", timeout=15000)
+        first = store.conn.execute("SELECT last_seen FROM batches WHERE pid='WAITER'").fetchone()[0]
+        time.sleep(2.5)
+        later = store.conn.execute("SELECT last_seen FROM batches WHERE pid='WAITER'").fetchone()[0]
+        assert later > first  # heartbeats arrive while the page is open
+    finally:
+        httpd.shutdown()

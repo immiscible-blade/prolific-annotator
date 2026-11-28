@@ -16,7 +16,12 @@ YAML note: unquoted `yes`, `no`, `on`, `off` stay **text** in this tool. Only `t
 | `instructions_html` | short default | HTML shown before the first text |
 | `estimated_minutes` | `20` | for your records; not shown unless you put it in the HTML |
 | `block_copy` | `true` | block selecting and copying the text (attempts are logged) |
-| `stale_minutes` | `90` | a claimed, unfinished batch is given to someone else after this long. Keep it above Prolific's maximum time |
+| `idle_minutes` | `15` | without a Prolific token (or for ids Prolific doesn't know): a claimed batch with no heartbeat or answer for this long goes to the next participant |
+| `stale_minutes` | `90` | the same, for batches claimed by an older app version that sends no heartbeat (measured from the claim) |
+| `prolific_study_id` | `""` | study id for the Prolific status check; empty means the `STUDY_ID` in the participant's link. The API token itself never goes in this file |
+| `heartbeat_seconds` | `60` | how often an open page tells the backend the participant is still there (at most a third of `idle_minutes`) |
+| `waiting_poll_seconds` | `30` | waiting room: when every batch is taken, how often the page tries again |
+| `waiting_minutes` | `15` | ...and for how long before asking the participant to return the study |
 
 ## `items`
 

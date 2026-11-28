@@ -76,7 +76,9 @@ def _store(build_dir, a, cfg=None):
 
 def cmd_serve(a):
     from .server import serve
-    httpd, store = serve(a.build, a.host, a.port, a.db, a.stale_minutes)
+    httpd, store = serve(a.build, a.host, a.port, a.db, a.stale_minutes, idle_minutes=a.idle_minutes)
+    print("Prolific status check: " + ("on (PROLIFIC_TOKEN set)" if store.statuses else
+                                       "off (set PROLIFIC_TOKEN to free returned batches at once)"))
     print(f"Serving {a.build}/site with the API at http://{a.host}:{a.port}/api  (database: {store.db_path})\n"
           f"Test link: http://{a.host}:{a.port}/?PROLIFIC_PID=TEST_me   (Ctrl+C to stop)")
     try:
@@ -156,7 +158,8 @@ def main(argv=None):
         if name == "serve":
             s.add_argument("--host", default="127.0.0.1")
             s.add_argument("--port", type=int, default=8765)
-            s.add_argument("--stale-minutes", type=float, default=90)
+            s.add_argument("--stale-minutes", type=float, default=None, help="default: from study.yaml")
+            s.add_argument("--idle-minutes", type=float, default=None, help="default: from study.yaml")
         if name == "export":
             s.add_argument("--out", default="exports")
         if name == "release":

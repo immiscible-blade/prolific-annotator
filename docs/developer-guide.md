@@ -46,12 +46,21 @@ Both backends implement it exactly; `tests/js/test_code_gs.js` and `tests/test_s
 | pid already holds a batch, not done | the same batch, with `resume_pos` = distinct positions already posted |
 | pid holds a batch that is done | `{"ok": false, "error": "You have already completed this study."}` |
 | otherwise | the first free batch, or the first batch claimed more than `stale_minutes` ago (logged as `released_stale` in sessions) |
-| none left | `{"ok": false, "error": "No study slots are available …"}` |
+| none free | if a batch's holder has left (see below), that batch, with the reason logged as `released_<reason>` in sessions |
+| none at all | `{"ok": false, "waiting": true, "error": "No study slots are available …"}`; the app shows the waiting room and retries |
+
+**Release rules**, identical in `Code.template.gs` and `server.py` and tested in both contract tests:
+1. Never-claimed batches always go first.
+2. With a Prolific API token, the holder's submission status decides: `RETURNED`, `TIMED-OUT`, `REJECTED` and `SCREENED OUT` free the batch; any other status keeps it. Statuses come from `GET https://api.prolific.com/api/v1/studies/{id}/submissions/` (`Authorization: Token …`), cached for 30 s, and are fetched only when no batch is free.
+3. Otherwise (no token, API error, or an id Prolific doesn't know, such as a preview): no heartbeat or answer for `idle_minutes`, measured from `last_seen`. Rows with no `last_seen` are measured from `claimed_at` against `stale_minutes`.
 
 ### `POST <url>` (body is JSON, sent as `Content-Type: text/plain` to avoid a CORS preflight)
 
 * `{"action": "item", "pid", "batch_id", "row": {...}}` appends a response row.
+* `{"action": "ping", "pid", "batch_id"}` records a sign of life (`last_seen`); answers `{"ok": true, "held": false}` if the batch has been given to someone else.
 * `{"action": "complete", "pid", "batch_id", "summary": {...}}` marks the batch done and logs the session.
+
+Posting an item also updates `last_seen`.
 
 ### Item row (`row`, stored as `row_json`)
 
@@ -77,7 +86,7 @@ The Google Sheet tabs and `pannot export` produce the same columns:
 |---|---|
 | `responses` | `ts, pid, batch_id, item_id, pos, label, time_on_item, trace, row_json` (`trace` = answers JSON, `label` = outcome) |
 | `sessions` | `ts, pid, batch_id, event, summary_json` |
-| `batches` | `batch_id, items, status, pid, claimed_at, completed_at` |
+| `batches` | `batch_id, items, status, pid, claimed_at, completed_at, last_seen` |
 
 ## Extending
 
@@ -113,6 +122,6 @@ pytest tests/e2e             # Playwright + Chromium; set REQUIRE_BROWSER=1 to f
 | `test_ingest.py` | planted bad workers flagged and honest ones not, `FALSE` labels, test ids, rejections, no-majority rule |
 | `test_compare.py` | null calibration and power of the permutation test |
 | `test_cli.py` | init → validate → build → simulate → ingest → compare |
-| `e2e/test_browser.py` | a full session in Chromium against the server; demo mode CSV |
+| `e2e/test_browser.py` | a full session in Chromium against the server; demo mode CSV; waiting room and heartbeat |
 
 CI (`.github/workflows/ci.yml`) runs the unit tests on Python 3.10, 3.12 and 3.13, and the browser tests on 3.12. `pages.yml` publishes both examples in demo mode to GitHub Pages.

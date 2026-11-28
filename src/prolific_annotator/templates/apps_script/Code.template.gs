@@ -7,22 +7,43 @@
  *  2. Replace the editor contents with this file and save.
  *  3. Pick `setup` in the function dropdown and Run it once (approve the permissions).
  *     It creates the tabs batches / responses / sessions and fills `batches`.
- *  4. Deploy -> New deployment -> Web app; execute as: Me; who has access: Anyone.
+ *  4. Optional but recommended: Project Settings -> Script Properties, add
+ *       PROLIFIC_TOKEN     an API token from app.prolific.com/researcher/tokens/
+ *       PROLIFIC_STUDY_ID  your study id (else the STUDY_ID in each participant's link)
+ *     then run `checkProlific` once (it also asks permission to contact api.prolific.com).
+ *  5. Deploy -> New deployment -> Web app; execute as: Me; who has access: Anyone.
  *     Put the /exec URL in study.yaml (study.backend.url) and rebuild the site.
+ *     Later code changes: Deploy -> Manage deployments -> Edit -> Version: New version
+ *     (keeps the same /exec URL).
  *
- * Editor-only helpers: `resetTestBatches` (undo test sessions), `reloadBatches`
- * (replace the batch list before anyone real has started).
+ * Giving abandoned batches to the next participant:
+ *  - never-claimed batches are always handed out first;
+ *  - with a Prolific token, a busy batch is freed as soon as Prolific reports its holder
+ *    as RETURNED, TIMED-OUT, REJECTED or SCREENED OUT; holders who are still ACTIVE keep
+ *    it however long they pause (Prolific's own maximum time ends that);
+ *  - ids Prolific does not know (previews, tests), or no token / an API error: the batch
+ *    is freed after IDLE_MIN minutes without a heartbeat or answer (STALE_MIN after the
+ *    claim for rows without any heartbeat record).
+ *  When nothing can be handed out, claim answers {ok:false, waiting:true}; the app waits.
+ *
+ * Editor-only helpers: `resetTestBatches`, `reloadBatches`, `checkProlific`.
  *
  * API (same as the bundled Python server):
- *   GET  ?action=claim&pid=..  -> {ok, batch_id, items, resume_pos}
- *   POST {action:"item", pid, batch_id, row}        (Content-Type: text/plain)
+ *   GET  ?action=claim&pid=..&study=..  -> {ok, batch_id, items, resume_pos} | {ok:false, waiting}
+ *   POST {action:"item", pid, batch_id, row}          (Content-Type: text/plain)
+ *   POST {action:"ping", pid, batch_id}               -> {ok, held}
  *   POST {action:"complete", pid, batch_id, summary}
  */
-const STALE_MIN = __STALE_MIN__;          // a claimed, unfinished batch is reassigned after this
+const IDLE_MIN = __IDLE_MIN__;            // no heartbeat / answer for this long -> batch free again
+const STALE_MIN = __STALE_MIN__;          // rows without any heartbeat record (older app versions)
 const TEST_PREFIXES = __TEST_PREFIXES__;  // participant ids treated as tests
+const DEFAULT_STUDY_ID = __STUDY_ID__;    // study.prolific_study_id from study.yaml ("" = from the link)
+const PROLIFIC_API = "https://api.prolific.com/api/v1";
+const PROLIFIC_RELEASE = ["RETURNED", "TIMED-OUT", "REJECTED", "SCREENED OUT"];
+const PROLIFIC_CACHE_SEC = 30;
 
 const HEADERS = {
-  batches: ["batch_id", "items", "status", "pid", "claimed_at", "completed_at"],
+  batches: ["batch_id", "items", "status", "pid", "claimed_at", "completed_at", "last_seen"],
   responses: ["ts", "pid", "batch_id", "item_id", "pos", "label", "time_on_item", "trace", "row_json"],
   sessions: ["ts", "pid", "batch_id", "event", "summary_json"],
 };
@@ -53,9 +74,10 @@ function setup() {
   sheet_("sessions").getRange("B:B").setNumberFormat("@");
   const sh = sheet_("batches");
   if (sh.getLastRow() <= 1) {
-    const rows = BATCHES.map((b) => [b.batch_id, JSON.stringify(b.items), "", "", "", ""]);
-    sh.getRange(2, 1, rows.length, 6).setValues(rows);
+    const rows = BATCHES.map((b) => [b.batch_id, JSON.stringify(b.items), "", "", "", "", ""]);
+    sh.getRange(2, 1, rows.length, 7).setValues(rows);
   }
+  if (sh.getRange(1, 7).getValue() !== "last_seen") sh.getRange(1, 7).setValue("last_seen");
   const ss = SpreadsheetApp.getActive();
   const def = ss.getSheetByName("Sheet1");
   if (def && def.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(def);
@@ -70,32 +92,45 @@ function doGet(e) {
   try {
     if (sheet_("batches").getLastRow() <= 1) setup();
     const sh = sheet_("batches");
-    const rows = sh.getDataRange().getValues(); // [batch_id, items, status, pid, claimed_at, completed_at]
+    const rows = sh.getDataRange().getValues(); // [batch_id, items, status, pid, claimed_at, completed_at, last_seen]
     const now = new Date();
     for (let i = 1; i < rows.length; i++) {          // resume
       if (rows[i][3] === p.pid) {
         if (rows[i][2] === "done") return json_({ ok: false, error: "You have already completed this study." });
+        sh.getRange(i + 1, 7).setValue(now.toISOString());
         return json_({ ok: true, batch_id: rows[i][0], items: JSON.parse(rows[i][1]), resume_pos: answered_(p.pid, rows[i][0]) });
       }
     }
-    for (let i = 1; i < rows.length; i++) {          // free or stale batch
-      const st = rows[i][2];
-      const stale = st === "claimed" && (now - new Date(rows[i][4])) / 60000 > STALE_MIN;
-      if (!st || stale) {
-        sh.getRange(i + 1, 3, 1, 3).setValues([["claimed", p.pid, now.toISOString()]]);
-        if (stale) sheet_("sessions").appendRow([now.toISOString(), rows[i][3], rows[i][0], "released_stale", ""]);
-        return json_({ ok: true, batch_id: rows[i][0], items: JSON.parse(rows[i][1]), resume_pos: 0 });
-      }
+    const give = (i, reason) => {
+      sh.getRange(i + 1, 3, 1, 3).setValues([["claimed", p.pid, now.toISOString()]]);
+      sh.getRange(i + 1, 7).setValue(now.toISOString());
+      if (reason) sheet_("sessions").appendRow([now.toISOString(), rows[i][3], rows[i][0], "released_" + reason, ""]);
+      return json_({ ok: true, batch_id: rows[i][0], items: JSON.parse(rows[i][1]), resume_pos: 0 });
+    };
+    for (let i = 1; i < rows.length; i++) if (!rows[i][2]) return give(i, "");      // never claimed
+    const statuses = prolificStatuses_(p.study);
+    for (let i = 1; i < rows.length; i++) {                                         // holder has left
+      if (rows[i][2] !== "claimed") continue;
+      const reason = releaseReason_(rows[i], now, statuses);
+      if (reason) return give(i, reason);
     }
-    return json_({ ok: false, error: "No study slots are available right now. Please return the study." });
+    return json_({ ok: false, waiting: true, error: "No study slots are available right now. Please return the study." });
   } finally { lock.releaseLock(); }
 }
 
 function doPost(e) {
   const d = JSON.parse(e.postData.contents);
   const ts = new Date().toISOString();
+  if (d.action === "ping") {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try { return json_({ ok: true, held: touch_(d.pid, d.batch_id) }); } finally { lock.releaseLock(); }
+  }
   if (d.action === "item") {
     const r = d.row;
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try { touch_(d.pid, d.batch_id); } finally { lock.releaseLock(); }
     sheet_("responses").appendRow([ts, d.pid, d.batch_id, r.item_id, r.pos, r.outcome == null ? "" : r.outcome,
                                    r.time_on_item, JSON.stringify(r.answers), JSON.stringify(r)]);
     return json_({ ok: true });
@@ -123,13 +158,72 @@ function answered_(pid, batch) {
   return pos.size;
 }
 
+// Record a sign of life for the batch this participant holds; false if it was given away.
+function touch_(pid, batch) {
+  const sh = sheet_("batches");
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === batch && rows[i][3] === pid) { sh.getRange(i + 1, 7).setValue(new Date().toISOString()); return true; }
+  }
+  return false;
+}
+
+function idle_(row, now) {
+  if (row[6]) return (now - new Date(row[6])) / 60000 > IDLE_MIN;
+  return (now - new Date(row[4])) / 60000 > STALE_MIN;
+}
+
+// Why a claimed batch may be given away, or null to keep it.
+function releaseReason_(row, now, statuses) {
+  const st = statuses ? statuses[String(row[3])] : undefined;
+  if (st) return PROLIFIC_RELEASE.indexOf(st) >= 0 ? "prolific_" + st.toLowerCase().replace(/ /g, "_") : null;
+  return idle_(row, now) ? "stale" : null;
+}
+
+// {participant_id: status} for the study, or null without a token / on any API error.
+function prolificStatuses_(studyFromLink) {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty("PROLIFIC_TOKEN");
+  const study = props.getProperty("PROLIFIC_STUDY_ID") || DEFAULT_STUDY_ID || studyFromLink;
+  if (!token || !study) return null;
+  const cache = CacheService.getScriptCache();
+  const key = "prolific_status_" + study;
+  const hit = cache.get(key);
+  if (hit) return JSON.parse(hit);
+  try {
+    const out = {};
+    let url = `${PROLIFIC_API}/studies/${encodeURIComponent(study)}/submissions/`;
+    for (let page = 0; url && page < 50; page++) {
+      const r = UrlFetchApp.fetch(url, { headers: { Authorization: "Token " + token }, muteHttpExceptions: true });
+      if (r.getResponseCode() !== 200) return null;
+      const body = JSON.parse(r.getContentText());
+      (body.results || []).forEach((s) => { out[String(s.participant_id)] = s.status; });
+      url = body._links && body._links.next && body._links.next.href;  // not documented; followed if present
+    }
+    const txt = JSON.stringify(out);
+    if (txt.length < 90000) cache.put(key, txt, PROLIFIC_CACHE_SEC);
+    return out;
+  } catch (e) { return null; }
+}
+
+// Editor helper: check the Prolific token and study id.
+function checkProlific() {
+  const props = PropertiesService.getScriptProperties();
+  CacheService.getScriptCache().remove("prolific_status_" + (props.getProperty("PROLIFIC_STUDY_ID") || DEFAULT_STUDY_ID));
+  const st = prolificStatuses_("");
+  if (!st) return "Could not read submissions: check PROLIFIC_TOKEN and PROLIFIC_STUDY_ID in Script Properties.";
+  const counts = {};
+  Object.keys(st).forEach((k) => { counts[st[k]] = (counts[st[k]] || 0) + 1; });
+  return "OK: " + Object.keys(st).length + " submissions " + JSON.stringify(counts);
+}
+
 // Editor helper: free batches held by test ids and delete their rows.
 function resetTestBatches() {
   const b = sheet_("batches");
   const rows = b.getDataRange().getValues();
   let freed = 0, deleted = 0;
   for (let i = 1; i < rows.length; i++) {
-    if (isTest_(rows[i][3])) { b.getRange(i + 1, 3, 1, 4).setValues([["", "", "", ""]]); freed++; }
+    if (isTest_(rows[i][3])) { b.getRange(i + 1, 3, 1, 5).setValues([["", "", "", "", ""]]); freed++; }
   }
   for (const name of ["responses", "sessions"]) {
     const sh = sheet_(name);
@@ -147,8 +241,8 @@ function reloadBatches() {
     if (rows[i][3] && !isTest_(rows[i][3])) throw new Error("A real participant (" + rows[i][3] + ") has a batch; not reloading.");
   }
   if (sh.getLastRow() > 1) sh.deleteRows(2, sh.getLastRow() - 1);
-  const out = BATCHES.map((b) => [b.batch_id, JSON.stringify(b.items), "", "", "", ""]);
-  sh.getRange(2, 1, out.length, 6).setValues(out);
+  const out = BATCHES.map((b) => [b.batch_id, JSON.stringify(b.items), "", "", "", "", ""]);
+  sh.getRange(2, 1, out.length, 7).setValues(out);
   return `batches reloaded: ${out.length} rows`;
 }
 

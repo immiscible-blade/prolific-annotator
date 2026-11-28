@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prolific-annotator"
-version = "0.1.0"
+version = "0.2.0"
 description = "Run text annotation studies on Prolific: configurable question flows, balanced batching, attention/gold checks, quality flags and label distributions."
 readme = "README.md"
 license = { text = "MIT" }

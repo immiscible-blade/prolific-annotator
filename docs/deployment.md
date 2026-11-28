@@ -23,10 +23,21 @@ Never deploy `build/private/`: it contains the gold answers and item roles.
 
 6. Rebuild (`pannot build …`) and deploy the site.
 
+**Recommended: let Prolific say who has left.** Without it, a batch whose participant returned the study is only freed after `idle_minutes` with no heartbeat (default 15). With it, the batch is freed as soon as Prolific reports the participant as *returned*, *timed out*, *rejected* or *screened out*, and participants who are still active keep their batch however long they pause.
+
+1. On Prolific, open [API Tokens](https://app.prolific.com/researcher/tokens/), click *Create API Token* and copy it. The token can act on your whole researcher account, so keep it out of `study.yaml`, git and chat.
+2. In the Apps Script editor, go to *Project Settings* (gear icon) → *Script Properties* → *Add script property*:
+   * `PROLIFIC_TOKEN` = the token;
+   * `PROLIFIC_STUDY_ID` = your study id (the `STUDY_ID` in the study link, or set `study.prolific_study_id`).
+3. Run **`checkProlific`** from the function dropdown. Google asks for permission to contact `api.prolific.com`; it should then report the submissions it can see, e.g. `OK: 12 submissions {"ACTIVE":3,"AWAITING REVIEW":9}`.
+
+Only people with edit access to the script can see Script Properties. Participants never see the token.
+
 Helpers you run from the Apps Script editor (no redeploy needed):
 
 * `resetTestBatches`: frees batches claimed by test ids and deletes their rows.
 * `reloadBatches`: replaces the batch list after you paste a regenerated `Code.gs`. It refuses once a real participant has a batch.
+* `checkProlific`: tests the Prolific token and study id.
 
 **Changing the backend code** (not just running a helper) needs *Deploy → Manage deployments → Edit → New version*. The `/exec` URL stays the same.
 
@@ -40,7 +51,7 @@ Export: click the `responses` tab, then File → Download → Comma-separated va
 pannot serve build --host 0.0.0.0 --port 8765 --db /srv/study/responses.sqlite
 ```
 
-This one process serves both the site and the API at `/api`, so set `backend: {type: server}` (leave `url` empty) and you don't need a separate static host. Prolific needs **HTTPS**, so put it behind a reverse proxy, e.g. [Caddy](https://caddyserver.com):
+This one process serves both the site and the API at `/api`, so set `backend: {type: server}` (leave `url` empty) and you don't need a separate static host. To free returned batches through Prolific's API, start it with the token in the environment: `PROLIFIC_TOKEN=… pannot serve build …`. On startup it prints whether the Prolific check is on. Prolific needs **HTTPS**, so put it behind a reverse proxy, e.g. [Caddy](https://caddyserver.com):
 
 ```
 study.example.org {

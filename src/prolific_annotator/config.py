@@ -27,7 +27,15 @@ DEFAULTS: dict[str, Any] = {
         "instructions_html": "<p>Read each text and answer the questions.</p>",
         "estimated_minutes": 20,
         "block_copy": True,
-        "stale_minutes": 90,
+        # batch release: a claimed batch is given to the next participant when its holder
+        # has left. With a Prolific API token (never in this file; see docs/deployment.md)
+        # Prolific's own status decides; otherwise no heartbeat/answer for idle_minutes.
+        "idle_minutes": 15,
+        "stale_minutes": 90,          # rows without any heartbeat record (older app versions)
+        "prolific_study_id": "",      # optional; else the STUDY_ID in the participant's link
+        "heartbeat_seconds": 60,
+        "waiting_poll_seconds": 30,   # waiting room: how often to retry when everything is taken
+        "waiting_minutes": 15,        # ...and for how long
     },
     "items": {
         "file": "items.csv",
@@ -205,6 +213,14 @@ def validate(cfg: dict) -> None:
             raise ConfigError(f"design.attention {a['id']}: the hidden instruction's answers must differ "
                               "from the expected answers, or honest participants look like they followed it")
 
+    st = cfg["study"]
+    for k in ("idle_minutes", "stale_minutes", "heartbeat_seconds", "waiting_poll_seconds", "waiting_minutes"):
+        if not isinstance(st[k], (int, float)) or st[k] <= 0:
+            raise ConfigError(f"study.{k}: must be a positive number")
+    if st["heartbeat_seconds"] * 3 > st["idle_minutes"] * 60:
+        raise ConfigError("study.heartbeat_seconds: must be well below idle_minutes (at most a third), "
+                          "or active participants could lose their batch")
+
     b = cfg["study"]["backend"]
     if b.get("type") not in ("demo", "apps_script", "server"):
         raise ConfigError("study.backend.type: one of demo, apps_script, server")
@@ -261,5 +277,8 @@ def public_config(cfg: dict) -> dict:
         "consent_html": s["consent_html"],
         "instructions_html": s["instructions_html"],
         "block_copy": bool(s["block_copy"]),
+        "heartbeat_seconds": s["heartbeat_seconds"],
+        "waiting_poll_seconds": s["waiting_poll_seconds"],
+        "waiting_minutes": s["waiting_minutes"],
         "task": {k: cfg["task"][k] for k in ("start", "questions", "outcomes", "show_outcome")},
     }

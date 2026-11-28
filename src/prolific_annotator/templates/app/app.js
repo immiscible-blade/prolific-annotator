@@ -9,13 +9,19 @@
  *   demo         no backend: a batch from data/batches_demo.json, answers kept in the
  *                page and offered as a CSV download (same columns as the backend export)
  *
+ * Batches and leaving: the loading screen stays up until a batch has arrived; if every
+ * batch is taken, a waiting room retries every waiting_poll_seconds for waiting_minutes.
+ * While a batch is held the page sends a heartbeat every heartbeat_seconds, so the
+ * backend can give the batch to someone else once the participant has really left
+ * (Prolific status, or no heartbeat for idle_minutes).
+ *
  * Logged per item: answers, outcome, time on item, time to first answer, focus/blur
  * and visibility events, blocked copy attempts, answer history, whether and when the
  * highlighted passage came into view, and how far the text was scrolled.
  */
 (function () {
   "use strict";
-  const APP_VERSION = "prolific-annotator/0.1";
+  const APP_VERSION = "prolific-annotator/0.2";
   const qs = new URLSearchParams(location.search);
   const $ = (id) => document.getElementById(id);
   const S = { cfg: null, items: {}, pid: null, study: qs.get("STUDY_ID") || "", session: qs.get("SESSION_ID") || "",
@@ -105,11 +111,25 @@
     $("consent-btn").onclick = () => show("screen-instr");
     $("instr-btn").onclick = () => { S.tInstrDone = now(); S.pos >= S.seq.length ? finish() : renderItem(); };
     setupCopyBlocking();
+    let claim;
     try {
-      const claim = await api("claim");
-      if (!claim.ok) return fail(claim.error || "No study slots are available right now. Please return the study.");
-      S.batch = claim.batch_id; S.seq = claim.items; S.pos = claim.resume_pos || 0;
+      const t0 = Date.now();
+      for (;;) {
+        claim = await api("claim");
+        if (claim.ok) break;
+        const full = claim.waiting || /no study slots/i.test(claim.error || "");
+        if (!full) return fail(claim.error || "Could not start the study. Please return it on Prolific.");
+        if (Date.now() - t0 > S.cfg.waiting_minutes * 60000)
+          return fail("All places in this study are still in use. Please return the study on Prolific; sorry for the wait.");
+        $("loading-msg").textContent = "All places in this study are in use right now, usually because someone has just left. " +
+          `This page checks again every ${S.cfg.waiting_poll_seconds} seconds and will continue by itself. ` +
+          `Please keep it open (at most ${S.cfg.waiting_minutes} minutes).`;
+        await new Promise((res) => setTimeout(res, S.cfg.waiting_poll_seconds * 1000));
+      }
     } catch (e) { return fail("Could not reach the study server. Please check your connection and reload."); }
+    S.batch = claim.batch_id; S.seq = claim.items; S.pos = claim.resume_pos || 0;
+    if (!S.batch || !Array.isArray(S.seq) || !S.seq.length) return fail("Could not load your texts. Please reload the page.");
+    S.heartbeat = setInterval(() => { api("ping").catch(() => {}); }, S.cfg.heartbeat_seconds * 1000);
     show("screen-consent");
   }
 
@@ -224,6 +244,8 @@
   function csvCell(v) { const s = String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
 
   async function finish() {
+    if (!S.batch) return fail("Could not load your texts. Please reload the page.");  // never redirect without a batch
+    if (S.heartbeat) { clearInterval(S.heartbeat); S.heartbeat = null; }
     show("screen-done");
     $("progress").textContent = "";
     const summary = { t_total: now(), t_instr: S.tInstrDone, session_events: S.sessionEvents,

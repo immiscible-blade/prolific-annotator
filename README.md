@@ -25,7 +25,10 @@ It grew out of a research study that collected larger-N label distributions for 
   * Copying the text is blocked and logged.
 * **Flags, not silent exclusion.** Every worker gets flags, and nobody is dropped automatically. Run analyses with and without flagged workers, and drop only participants you rejected by hand.
 * **Two backends, one API.** Google Apps Script (free, no server) or `pannot serve` (Python standard library + SQLite). The exports are identical.
-* **Resumable sessions.** A reload resumes where the participant left off. Abandoned batches are reassigned automatically, and test sessions can be wiped.
+* **Resumable sessions, no stuck participants.** A reload resumes where the participant left off.
+  * When someone returns the study, their batch is freed as soon as Prolific says so (optional API token), or else after a few minutes without a heartbeat.
+  * Newcomers who find every batch busy wait in a waiting room instead of hitting an error.
+  * Test sessions can be wiped.
 * **"Are k annotations enough?"** `pannot compare` runs an exchangeability permutation test of earlier labels against the new crowd labels.
 
 ## Quickstart
